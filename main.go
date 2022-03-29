@@ -24,22 +24,25 @@ type Record struct {
 	Ratio float64
 }
 
+type Payload struct {
+	content string
+	file    *bytes.Buffer
+}
+
 func main() {
 	err := godotenv.Load(".env")
 	if err != nil {
 		fmt.Println("cannot load .env file", err)
 	}
 
-	AWS_ACCOUNT := os.Getenv("AWS_ACCOUNT")
+	AWS_ACCOUNT_ID := os.Getenv("AWS_ACCOUNT")
 	BOT_TOKEN := os.Getenv("BOT_TOKEN")
 	CHANNEL_ID := os.Getenv("CHANNEL_ID")
 
 	start, end := getTimePeriod()
 	res, err := getCost(start, end)
-	log.Printf("%v", res)
 	if err != nil {
-		fmt.Errorf("%w", err)
-		return
+		fmt.Errorf("cannot get cost, %v", err)
 	}
 
 	// Calculate the total aws usage costs
@@ -48,55 +51,66 @@ func main() {
 	// Get the list in descending order with respect to service usage costs
 	list := createCostList(res, total)
 
-	content := fmt.Sprintf("AWS Account: %v\nTimePeriod: %v - %v\nTotal: $%.2f\n\n", AWS_ACCOUNT, start, end, total)
+	content := fmt.Sprintf("AWS Account: %v\nTimePeriod: %v - %v\nTotal: $%.2f\n\n", AWS_ACCOUNT_ID, start, end, total)
 
 	for _, v := range list {
 		content = content + fmt.Sprintf("- %v: $%.2f (%.1f%%)\n", v.Name, v.Cost, v.Ratio)
 	}
 
+	content = fmt.Sprintf("__Daily Report__\n\n%v", content)
+
 	b, err := drawPieChart(list)
 	if err != nil {
-		fmt.Println("error creating Pie Chart", err)
-		return
+		fmt.Errorf("error create Pie Chart, %v", err)
 	}
 
+	payload := Payload{content, b}
+
+	message, err := sendCost(payload, BOT_TOKEN, CHANNEL_ID)
+	if err != nil {
+		fmt.Errorf("cannot send payload, %v", err)
+	}
+
+	fmt.Println(message)
+
+}
+
+func sendCost(payload Payload, BOT_TOKEN, CHANNEL_ID string) (*discordgo.Message, error) {
 	dg, err := discordgo.New("Bot " + BOT_TOKEN)
 	if err != nil {
-		fmt.Println("error creating Discord session,", err)
-		return
+		return nil, fmt.Errorf("cannot create Discord session, %v", err)
 	}
 
-	st, err := dg.WebhookCreate(CHANNEL_ID, "aws", "aws")
+	webhook, err := dg.WebhookCreate(CHANNEL_ID, "aws", "aws")
 	if err != nil {
-		fmt.Println("error creating Webhook,", err)
-		return
+		return nil, fmt.Errorf("cannot create Webhook, %v", err)
 	}
 
-	file := &discordgo.File{
-		Name:        "test.png",
-		ContentType: "image/png",
-		Reader:      b,
+	files := []*discordgo.File{
+		{
+			Name:        "test.png",
+			ContentType: "image/png",
+			Reader:      payload.file,
+		},
 	}
 
-	var files []*discordgo.File
-	files = append(files, file)
-
-	data := &discordgo.WebhookParams{
-		Username: st.Name,
-		Content:  fmt.Sprintf("__Daily Report__\n\n%v", content),
+	params := &discordgo.WebhookParams{
+		Username: webhook.Name,
+		Content:  payload.content,
 		Files:    files,
 	}
-	_, err = dg.WebhookExecute(st.ID, st.Token, true, data)
+
+	message, err := dg.WebhookExecute(webhook.ID, webhook.Token, true, params)
 	if err != nil {
-		fmt.Println("error executing Webhook,", err)
-		return
+		return nil, fmt.Errorf("error execute Webhook, %v", err)
 	}
 
-	err = dg.WebhookDelete(st.ID)
+	err = dg.WebhookDelete(webhook.ID)
 	if err != nil {
-		fmt.Println("error delete Webhook", err)
-		return
+		return nil, fmt.Errorf("error delete Webhook, %v", err)
 	}
+
+	return message, nil
 }
 
 func drawPieChart(records []Record) (*bytes.Buffer, error) {
