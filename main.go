@@ -28,7 +28,7 @@ type Payload struct {
 }
 
 func main() {
-	AWS_ACCOUNT_ID := os.Getenv("AWS_ACCOUNT")
+	AWS_ACCOUNT_ID := os.Getenv("AWS_ACCOUNT_ID")
 	BOT_TOKEN := os.Getenv("BOT_TOKEN")
 	CHANNEL_ID := os.Getenv("CHANNEL_ID")
 
