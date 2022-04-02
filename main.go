@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/costexplorer"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/joho/godotenv"
 	"github.com/wcharczuk/go-chart"
 )
 
@@ -29,11 +28,6 @@ type Payload struct {
 }
 
 func main() {
-	err := godotenv.Load(".env")
-	if err != nil {
-		fmt.Println("cannot load .env file", err)
-	}
-
 	AWS_ACCOUNT_ID := os.Getenv("AWS_ACCOUNT")
 	BOT_TOKEN := os.Getenv("BOT_TOKEN")
 	CHANNEL_ID := os.Getenv("CHANNEL_ID")
