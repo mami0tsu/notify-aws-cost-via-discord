@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"strconv"
@@ -51,20 +50,14 @@ func main() {
 	// Get the list in descending order with respect to service usage costs
 	list := createCostList(res, total)
 
-	content := fmt.Sprintf("AWS Account: %v\nTimePeriod: %v - %v\nTotal: $%.2f\n\n", AWS_ACCOUNT_ID, start, end, total)
+	content := createContent(total, list, start, end, AWS_ACCOUNT_ID)
 
-	for _, v := range list {
-		content = content + fmt.Sprintf("- %v: $%.2f (%.1f%%)\n", v.Name, v.Cost, v.Ratio)
-	}
-
-	content = fmt.Sprintf("__Daily Report__\n\n%v", content)
-
-	b, err := drawPieChart(list)
+	buffer, err := drawPieChart(list)
 	if err != nil {
 		fmt.Errorf("error create Pie Chart, %v", err)
 	}
 
-	payload := Payload{content, b}
+	payload := Payload{content, buffer}
 
 	message, err := sendCost(payload, BOT_TOKEN, CHANNEL_ID)
 	if err != nil {
@@ -72,7 +65,16 @@ func main() {
 	}
 
 	fmt.Println(message)
+}
 
+func createContent(total float64, list []Record, start, end, AWS_ACCOUNT_ID string) string {
+	content := fmt.Sprintf("__Daily Report__\n\nAWS Account: %v\nTimePeriod: %v - %v\nTotal: $%.2f\n\n", AWS_ACCOUNT_ID, start, end, total)
+
+	for _, v := range list {
+		content = content + fmt.Sprintf("- %v: $%.2f (%.1f%%)\n", v.Name, v.Cost, v.Ratio)
+	}
+
+	return content
 }
 
 func sendCost(payload Payload, BOT_TOKEN, CHANNEL_ID string) (*discordgo.Message, error) {
@@ -194,7 +196,6 @@ func getCost(start, end string) (*costexplorer.GetCostAndUsageOutput, error) {
 	})
 
 	if err != nil {
-		log.Println("%v", err)
 		return nil, fmt.Errorf("%w", err)
 	}
 
@@ -208,7 +209,6 @@ func getCost(start, end string) (*costexplorer.GetCostAndUsageOutput, error) {
 	})
 
 	if err != nil {
-		log.Printf("%v", err)
 		return nil, fmt.Errorf("%w", err)
 	}
 
